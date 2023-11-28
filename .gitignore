@@ -1,2 +1,5 @@
 *.zip
 *.ipynb
+venv/
+.idea/
+build/

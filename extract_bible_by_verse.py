@@ -1,43 +1,27 @@
-import os
-import re
+from pathlib import Path
 
-import json
+from scripture import Bible, Verse, BibleWriter
 
-os.mkdir("by_chapter")
 
-with open("json/ESV.json") as file:
-    data = json.load(file)
-    books = data["books"]
+def one_file_per_verse(verse: Verse, writer: BibleWriter):
+    book = verse.chapter.book
+    chapter = verse.chapter
 
-book_index = 1
-for book_title in books:
-    file_title = str.replace(book_title, " ", "_")
-    file_title = f"{book_index:02d}_{file_title}"
-    book = books[f"{book_title}"]
-    chapters = [chapter for chapter in book]
-    os.mkdir(f"by_chapter/{file_title}")
-    fulltexts = []
+    # One directory per book and chapter
+    book_dir = Path(f'{book.number}_{book.abbreviation}')
+    chapter_dir = book_dir / f'Chapter_{chapter.number}'
 
-    chap_index = 1
-    for chapter in chapters:
-        verses = [verse for verse in chapter]
-        indeces = [verses.index(verse) for verse in chapter]
+    # One file per verse
+    verse_file = f'{book.abbreviation}{chapter.number}-{verse.number}.md'
 
-        verses = []
+    # Create directory structure and verse files
+    writer.create_directory(chapter_dir)
+    writer.create_file(chapter_dir / verse_file, verse.text)
 
-        for index in indeces:
-            chunks = [i for i in chapter[index]]
-            verse = " ".join([chunk[0]
-                              for chunk in chunks if not isinstance(chunk[0], list)])
-            verse = re.sub(r'\s([?.,;!"](?:\s|$))', r'\1', verse)
-            verses.append(verse)
 
-        with open(f"by_chapter/{file_title}/Chapter_{chap_index:02d}.md", "w") as file:
-            file.write(f"# Chapter {chap_index}\n\n")
-            verse_index = 1
-            for verse in verses:
-                file.write(f"{verse_index}. {verse}\n")
-                verse_index += 1
-            file.write("\n")
-        chap_index += 1
-    book_index += 1
+if __name__ == '__main__':
+    BibleWriter(
+        Bible.from_json(),
+        verse_hook=one_file_per_verse,
+        output_directory='by_verse',
+    ).run()

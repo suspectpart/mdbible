@@ -1,4 +1,5 @@
 import re
+import shutil
 import typing
 from pathlib import Path
 
@@ -75,6 +76,8 @@ ABBREVIATIONS = {
 
 
 class IndexMixin:
+    """Add human-readable numbering to mixed-in class."""
+
     # noinspection PyUnresolvedReferences
     @property
     def number(self):
@@ -82,6 +85,8 @@ class IndexMixin:
 
 
 class Bible:
+    """The holy book."""
+
     def __init__(self, books):
         self.books = books
 
@@ -90,6 +95,7 @@ class Bible:
 
     @classmethod
     def from_json(cls, path=Path('json/ESV.json')):
+        """Read book with chapters and verses from JSON file."""
         with open(path) as file:
             books = [
                 Book(index, title, chunks)
@@ -101,6 +107,8 @@ class Bible:
 
 
 class Book(IndexMixin):
+    """A book of the bible."""
+
     def __init__(self, index, title, chunks):
         self.index = index
         self.title = title
@@ -131,21 +139,26 @@ class Book(IndexMixin):
     def chapters(self):
         """Chapters of this book."""
         return [
-            Chapter(index, chunks)
+            Chapter(index, self, chunks)
             for index, chunks
             in enumerate(self.chunks)
         ]
 
 
 class Chapter(IndexMixin):
-    def __init__(self, index, chunks):
+    """A chapter of a book."""
+
+    def __init__(self, index, book, chunks):
+        self.book = book
         self.index = index
         self.chunks = chunks
 
     def __iter__(self):
+        """Iterate all verses in chapter."""
         return iter(self.verses)
 
     def __str__(self):
+        """Output Chapter with number."""
         return f'Chapter {self.number}'
 
     @property
@@ -156,24 +169,64 @@ class Chapter(IndexMixin):
                              for chunk in chunks if not isinstance(chunk[0], list)])
             text = re.sub(r'\s([?.,;!"](?:\s|$))', r'\1', text)
 
-            yield Verse(index, text)
+            yield Verse(index, self, text)
 
 
 class Verse(IndexMixin):
-    def __init__(self, index, text):
+    """A single bible verse."""
+
+    def __init__(self, index, chapter, text):
         self.index = index
+        self.chapter = chapter
         self.text = text
 
     def __str__(self):
         return f'{self.number} {self.text}'
 
 
-if __name__ == '__main__':
-    for book in Bible.from_json():
-        print(book)
+# noinspection PyUnusedLocal
+def noop(*args, **kwargs):
+    pass
 
-        for chapter in book:
-            print('\t', chapter)
 
-            for verse in chapter:
-                print('\t\t', verse)
+class BibleWriter:
+    def __init__(
+            self,
+            bible,
+            book_hook=noop,
+            chapter_hook=noop,
+            verse_hook=noop,
+            output_directory=Path('default'),
+    ):
+        self.build_dir = Path(__file__).with_name('build') / output_directory
+        self.bible = bible
+        self.book_hook = book_hook
+        self.chapter_hook = chapter_hook
+        self.verse_hook = verse_hook
+
+    def _recreate_build_dir(self):
+        """Clean and recreate output directory"""
+        shutil.rmtree(self.build_dir, ignore_errors=True)
+        self.build_dir.mkdir(parents=True)
+
+    def run(self):
+        self._recreate_build_dir()
+
+        for book in self.bible:
+            self.book_hook(book, self)
+
+            for chapter in book:
+                self.chapter_hook(chapter, self)
+
+                for verse in chapter:
+                    self.verse_hook(verse, self)
+
+    def create_directory(self, path: Path, parents=True, exist_ok=True):
+        """Create directory inside build_dir."""
+        return (self.build_dir / path).mkdir(parents=parents, exist_ok=exist_ok)
+
+    def create_file(self, path, content):
+        """Create directory with path inside build_dir."""
+        with open(self.build_dir / path, 'wt') as file:
+            file.write(content)
+            file.write('\n')

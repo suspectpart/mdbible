@@ -1,44 +1,29 @@
-import json
-import re
-import os
+import io
+from pathlib import Path
 
-os.mkdir("by_book")
-with open("json/ESV.json") as file:
-    data = json.load(file)
-    books = data["books"]
+from scripture import BibleWriter, Book, Bible
 
-book_index = 1
-for book_title in books:
-    file_title = str.replace(book_title, " ", "_")
-    file_title = f"{book_index:02d}_{file_title}"
-    book = books[f"{book_title}"]
-    chapters = [chapter for chapter in book]
-    fulltexts = []
 
-    for chapter in chapters:
-        verses = [verse for verse in chapter]
-        indeces = [verses.index(verse) for verse in chapter]
+def by_book(book: Book, writer: BibleWriter):
+    book_file = f'{book.number}_{book.safe_title}.md'
 
-        verses = []
+    content = io.StringIO()
+    content.write(f'# {book.title}\n\n')
 
-        for index in indeces:
-            chunks = [i for i in chapter[index]]
-            verse = " ".join([chunk[0]
-                              for chunk in chunks if not isinstance(chunk[0], list)])
-            verse = re.sub(r'\s([?.,;!"](?:\s|$))', r'\1', verse)
-            verses.append(verse)
+    for chapter in book:
+        content.write(f'## Chapter {chapter.index + 1}\n\n')
 
-        fulltexts.append(verses)
+        for verse in chapter:
+            content.write(f'{verse.index + 1}. {verse.text}\n')
 
-    with open(f"by_book/{file_title}.md", "w") as file:
-        file.write(f"# {book_title}\n\n")
-        chap_index = 1
-        for chapter in fulltexts:
-            file.write(f"## Chapter {chap_index}\n\n")
-            verse_index = 1
-            for verse in chapter:
-                file.write(f"{verse_index}. {verse}\n")
-                verse_index += 1
-            file.write("\n")
-            chap_index += 1
-    book_index += 1
+        content.write('\n')
+
+    writer.create_file(book_file, content.getvalue())
+
+
+if __name__ == '__main__':
+    BibleWriter(
+        Bible.from_json(),
+        book_hook=by_book,
+        output_directory=Path('by_book'),
+    ).run()

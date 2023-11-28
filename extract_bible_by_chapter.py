@@ -1,42 +1,29 @@
-import json
-import re
-import os
+import io
+from pathlib import Path
 
-os.mkdir("by_chapter")
+from scripture import BibleWriter, Bible, Chapter
 
-with open("json/ESV.json") as file:
-    data = json.load(file)
-    books = data["books"]
 
-book_index = 1
-for book_title in books:
-    file_title = str.replace(book_title, " ", "_")
-    file_title = f"{book_index:02d}_{file_title}"
-    book = books[f"{book_title}"]
-    chapters = [chapter for chapter in book]
-    os.mkdir(f"by_chapter/{file_title}")
-    fulltexts = []
+def by_chapter(chapter: Chapter, writer: BibleWriter):
+    # One directory per book, one file per chapter
+    book_dir = Path(f'{chapter.book.number}_{chapter.book.safe_title}')
+    chapter_file = book_dir / Path(f'Chapter_{chapter.number}.md')
 
-    chap_index = 1
-    for chapter in chapters:
-        verses = [verse for verse in chapter]
-        indeces = [verses.index(verse) for verse in chapter]
+    # create contents of verse file
+    buffer = io.StringIO()
+    buffer.write(f'# Chapter {chapter.index + 1}\n\n')
 
-        verses = []
+    for verse in chapter:
+        buffer.write(f'{verse.index + 1}. {verse.text}\n')
 
-        for index in indeces:
-            chunks = [i for i in chapter[index]]
-            verse = " ".join([chunk[0]
-                              for chunk in chunks if not isinstance(chunk[0], list)])
-            verse = re.sub(r'\s([?.,;!"](?:\s|$))', r'\1', verse)
-            verses.append(verse)
+    # write directories and files
+    writer.create_directory(book_dir)
+    writer.create_file(chapter_file, buffer.getvalue())
 
-        with open(f"by_chapter/{file_title}/Chapter_{chap_index:02d}.md", "w") as file:
-            file.write(f"# Chapter {chap_index}\n\n")
-            verse_index = 1
-            for verse in verses:
-                file.write(f"{verse_index}. {verse}\n")
-                verse_index += 1
-            file.write("\n")
-        chap_index += 1
-    book_index += 1
+
+if __name__ == '__main__':
+    BibleWriter(
+        Bible.from_json(),
+        chapter_hook=by_chapter,
+        output_directory=Path('by_chapter'),
+    ).run()
